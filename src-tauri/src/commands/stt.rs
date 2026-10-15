@@ -34,13 +34,13 @@ fn truncate_safe(s: &str, max_bytes: usize) -> &str {
     &s[..end]
 }
 use rhema_audio::{AudioConfig, AudioFrame};
-use rhema_stt::{DeepgramClient, SttConfig, SttProvider, TranscriptEvent};
+use rhema_stt::{AssemblyAiClient, DeepgramClient, SttConfig, SttProvider, TranscriptEvent};
 
 /// Start the full audio-capture-to-transcription pipeline.
 ///
 /// 1. Opens the microphone via cpal (on a dedicated thread so the non-Send
 ///    `AudioCapture` never crosses thread boundaries).
-/// 2. Connects to the selected STT provider (Deepgram cloud or Whisper local).
+/// 2. Connects to the selected STT provider (Deepgram/AssemblyAI cloud or Whisper local).
 /// 3. Fans audio out to both the level meter (emits `audio_level` events) and STT.
 /// 4. Receives transcripts and emits `transcript_partial` / `transcript_final` events.
 /// 5. On final transcripts, runs the detection pipeline and emits `verse_detected` events.
@@ -131,6 +131,36 @@ pub async fn start_transcription(
             return Err(
                 "Whisper support not compiled. Rebuild with --features whisper".into(),
             );
+        }
+        "assemblyai" => {
+            let resolved_api_key = if api_key.is_empty() {
+                std::env::var("ASSEMBLYAI_API_KEY").unwrap_or_default()
+            } else {
+                api_key
+            };
+
+            if resolved_api_key.is_empty() {
+                return Err(
+                    "No AssemblyAI API key provided. Set it in Settings or via ASSEMBLYAI_API_KEY env var."
+                        .into(),
+                );
+            }
+
+            // Never log key material: this file is exported by users for support.
+            log::info!(
+                "Starting AssemblyAI transcription: api_key={}, device_id={device_id:?}, gain={gain:?}",
+                if resolved_api_key.is_empty() { "missing" } else { "set" }
+            );
+
+            let stt_config = SttConfig {
+                api_key: resolved_api_key,
+                model: "universal-3-5-pro".to_string(),
+                sample_rate: 16_000,
+                encoding: "pcm_s16le".to_string(),
+                language: None,
+            };
+
+            Box::new(AssemblyAiClient::new(stt_config))
         }
         _ => {
             // Deepgram (default)
@@ -321,7 +351,7 @@ pub async fn start_transcription(
     let conn_active = stt_active.clone();
     let provider_log_name = stt_provider.name().to_string();
 
-    // Task A: run the STT provider (Deepgram WS+REST or Whisper local).
+    // Task A: run the STT provider (Deepgram WS+REST, AssemblyAI WS, or Whisper local).
     tauri::async_runtime::spawn(async move {
         let result = stt_provider.start(audio_send_rx, event_tx).await;
         if let Err(e) = result {
@@ -385,15 +415,30 @@ pub async fn start_transcription(
                     epoch_ms(),
                     truncate_safe(&transcript, 40)
                 );
-                let direct_found = run_direct_detection(&app_clone, &transcript);
+                // While reading mode owns a chapter it is authoritative for
+                // book-less speech ("verse 20", "chapter 5", bare numbers).
+                // Running direct detection on those would let its own (possibly
+                // poisoned) context resolve them to a random book. Only run it
+                // when the utterance names a real reference.
+                let reading_has_verses = reading_mode_has_verses(&app_clone);
+                let has_explicit_reference = reading_has_verses
+                    && transcript_has_explicit_reference(&app_clone, &transcript);
+                let run_direct = should_run_direct(reading_has_verses, has_explicit_reference);
+                let direct_found = if run_direct {
+                    run_direct_detection(&app_clone, &transcript)
+                } else {
+                    false
+                };
                 if !is_final {
                     return;
                 }
-                check_reading_mode(&app_clone, &transcript, direct_found);
+                let handled = check_reading_mode(&app_clone, &transcript, direct_found);
                 if direct_found {
                     log::info!("[DET-SEMANTIC] Skipped — utterance is a spoken reference");
-                } else {
+                } else if should_run_semantic(reading_has_verses, handled) {
                     run_semantic_detection(&app_clone, &transcript);
+                } else {
+                    log::info!("[DET-SEMANTIC] Skipped — reading mode owns this utterance");
                 }
             })
             .await;
@@ -703,6 +748,56 @@ fn run_semantic_detection(app: &AppHandle, transcript: &str) {
     log::info!("[DET-SEMANTIC] Total: {:?}", t0.elapsed());
 }
 
+/// Whether reading mode currently has a chapter loaded (active or paused).
+fn reading_mode_has_verses(app: &AppHandle) -> bool {
+    let rm_managed: &Mutex<rhema_detection::ReadingMode> =
+        app.state::<Mutex<rhema_detection::ReadingMode>>().inner();
+    rm_managed.lock().is_ok_and(|rm| rm.has_verses())
+}
+
+/// Whether `text` names a book with an explicit chapter (or chapter:verse).
+fn transcript_has_explicit_reference(app: &AppHandle, text: &str) -> bool {
+    let detector_state: State<'_, Mutex<rhema_detection::DirectDetector>> = app.state();
+    detector_state
+        .lock()
+        .is_ok_and(|detector| detector.has_explicit_reference(text))
+}
+
+/// Direct detection runs only when it can't hijack a reading session: either no
+/// chapter is loaded, or the utterance is a genuine book+chapter reference.
+fn should_run_direct(reading_has_verses: bool, has_explicit_reference: bool) -> bool {
+    !reading_has_verses || has_explicit_reference
+}
+
+/// Semantic search is suppressed whenever reading mode owns the utterance.
+fn should_run_semantic(reading_has_verses: bool, handled_by_reading_mode: bool) -> bool {
+    !reading_has_verses && !handled_by_reading_mode
+}
+
+/// Decide whether a direct detection should (re)start reading mode.
+///
+/// Reading mode only ever sees explicit book references while it is active —
+/// book-less speech ("verse 20") is filtered out before direct detection runs
+/// (see `should_run_direct`). So here it simply follows: start when idle, and
+/// move to the detected book/chapter unless it is already tracking that exact
+/// book+chapter.
+fn should_restart_reading_mode(
+    is_active: bool,
+    has_verses: bool,
+    rm_book: i32,
+    rm_chapter: i32,
+    det_book: i32,
+    det_chapter: i32,
+) -> bool {
+    if !is_active && !has_verses {
+        return true; // Not active, nothing loaded — start fresh
+    }
+    if !is_active {
+        return true; // Paused — restart on a new explicit reference
+    }
+    !(rm_book == det_book && rm_chapter == det_chapter)
+}
+
 /// Check reading mode: if active, test transcript against expected verse.
 /// If direct detection just found a new verse, start/restart reading mode.
 /// Returns `true` when reading mode handled the transcript (suppresses semantic).
@@ -722,39 +817,17 @@ fn check_reading_mode(app: &AppHandle, transcript: &str, direct_found: bool) -> 
         };
 
         if let Some(recent) = verse_info {
-            // Get the confidence of the detection to distinguish explicit refs from false positives
-            let detection_confidence = {
-                let detector_state: State<'_, Mutex<rhema_detection::DirectDetector>> = app.state();
-                detector_state.lock().ok()
-                    .and_then(|d| d.recent_detections().front().map(|_| 0.95)) // Direct detections are always high confidence
-                    .unwrap_or(0.0)
-            };
-
             let should_start = {
                 let rm_managed: &Mutex<ReadingMode> = app.state::<Mutex<ReadingMode>>().inner();
                 match rm_managed.lock() {
-                    Ok(rm) => {
-                        if !rm.is_active() && !rm.has_verses() {
-                            true // Not active, no verses loaded — start fresh
-                        } else if !rm.is_active() && rm.has_verses() {
-                            // Paused — restart on any new explicit reference
-                            true
-                        } else if rm.current_book() == recent.book_number
-                            && rm.current_chapter() == recent.chapter {
-                            false // Same book+chapter — already tracking this
-                        } else if rm.current_book() != recent.book_number
-                            && detection_confidence >= 0.90 {
-                            // Different book with high confidence — explicit new reference
-                            // (e.g., "John 1:1" after reading Exodus). Restart.
-                            true
-                        } else if rm.current_book() == recent.book_number {
-                            // Same book, different chapter — natural progression
-                            true
-                        } else {
-                            // Different book, low confidence — likely false positive
-                            false
-                        }
-                    }
+                    Ok(rm) => should_restart_reading_mode(
+                        rm.is_active(),
+                        rm.has_verses(),
+                        rm.current_book(),
+                        rm.current_chapter(),
+                        recent.book_number,
+                        recent.chapter,
+                    ),
                     Err(_) => false,
                 }
             };
@@ -990,5 +1063,64 @@ pub fn stop_transcription(
 
     log::info!("Transcription stop requested");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn direct_runs_when_no_reading_session() {
+        assert!(should_run_direct(false, false));
+        assert!(should_run_direct(false, true));
+    }
+
+    /// While a chapter is locked, direct detection only runs for a genuine
+    /// book+chapter reference — never for book-less speech.
+    #[test]
+    fn direct_is_gated_on_explicit_reference_while_reading() {
+        assert!(!should_run_direct(true, false));
+        assert!(should_run_direct(true, true));
+    }
+
+    #[test]
+    fn semantic_is_suppressed_while_reading_or_when_handled() {
+        assert!(should_run_semantic(false, false));
+        assert!(!should_run_semantic(false, true));
+        assert!(!should_run_semantic(true, false));
+        assert!(!should_run_semantic(true, true));
+    }
+
+    #[test]
+    fn reading_mode_starts_when_nothing_is_loaded() {
+        assert!(should_restart_reading_mode(false, false, 0, 0, 1, 1));
+        assert!(should_restart_reading_mode(false, true, 1, 1, 43, 3));
+    }
+
+    #[test]
+    fn reading_mode_keeps_same_chapter() {
+        assert!(!should_restart_reading_mode(true, true, 1, 1, 1, 1));
+    }
+
+    #[test]
+    fn reading_mode_follows_same_book_new_chapter() {
+        assert!(should_restart_reading_mode(true, true, 1, 1, 1, 2));
+    }
+
+    /// An explicitly named different book is a deliberate jump: reading mode
+    /// moves there so a later "verse N" continues in the new book.
+    #[test]
+    fn reading_mode_follows_a_named_book_change() {
+        assert!(should_restart_reading_mode(true, true, 1, 1, 43, 3));
+        assert!(should_restart_reading_mode(true, true, 1, 1, 66, 20));
+    }
+
+    /// The book-less "verse 20" bug is prevented earlier: while a chapter is
+    /// loaded, `should_run_direct` returns false for such utterances, so no
+    /// detection ever reaches this decision.
+    #[test]
+    fn bookless_speech_never_reaches_the_restart_decision() {
+        assert!(!should_run_direct(true, false));
+    }
 }
 

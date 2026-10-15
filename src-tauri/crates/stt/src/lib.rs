@@ -2,12 +2,14 @@
 //!
 //! Provides real-time transcription via multiple providers:
 //! - **Deepgram** (cloud) — WebSocket streaming with keyword boosting
+//! - **`AssemblyAI`** (cloud) — Universal Streaming WebSocket with keyterms
 //! - **Whisper** (local) — offline inference via whisper.cpp
 //!
 //! # Key types
 //!
 //! - [`SttProvider`] — trait for swappable STT backends
 //! - [`DeepgramClient`] — Deepgram WebSocket/REST provider
+//! - [`AssemblyAiClient`] — `AssemblyAI` v3 streaming WebSocket provider
 //! - [`TranscriptEvent`] — streaming transcript events (partial, final, etc.)
 //! - [`SttConfig`] — API configuration
 //! - [`SttError`] — error type for STT operations
@@ -17,6 +19,7 @@
 //! - `rest-fallback` — enables REST API fallback client
 //! - `whisper` — enables local Whisper STT provider
 
+pub mod assemblyai;
 pub mod deepgram;
 pub mod error;
 pub mod keyterms;
@@ -27,6 +30,7 @@ pub mod types;
 #[cfg(feature = "whisper")]
 pub mod whisper;
 
+pub use assemblyai::AssemblyAiClient;
 pub use deepgram::DeepgramClient;
 pub use error::SttError;
 pub use keyterms::bible_keyterms;

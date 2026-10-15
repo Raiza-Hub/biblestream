@@ -1,13 +1,13 @@
 ---
 title: Speech-to-Text Engines
-description: Choose between local Whisper and cloud Deepgram, and configure either with the right environment variables.
+description: Choose between local Whisper, cloud Deepgram, or cloud AssemblyAI, and configure any of them with the right environment variables.
 icon: Mic
 ---
 
 import { Callout } from "fumadocs-ui/components/callout";
 import { Card, Cards } from "fumadocs-ui/components/card";
 
-Rhema supports two STT engines, and you can swap between them at runtime
+Rhema supports three STT engines, and you can swap between them at runtime
 from the settings dialog. They map cleanly to two different operating
 modes: zero-marginal-cost local inference, or offload-to-the-cloud
 streaming.
@@ -20,6 +20,10 @@ streaming.
   <Card
     title="Deepgram (cloud, paid)"
     description="Streams audio to Deepgram's WebSocket endpoint with a REST fallback. Lower latency and higher accuracy on long-form sermons; needs a paid API key."
+  />
+  <Card
+    title="AssemblyAI (cloud, paid)"
+    description="Streams audio to AssemblyAI's Universal-3.5 Pro WebSocket endpoint. Word timestamps and keyterm boosting; needs a paid API key. No REST fallback."
   />
 </Cards>
 
@@ -75,28 +79,57 @@ labeled too.
 
 ![Settings dialog with the STT engine picker showing Whisper and Deepgram options](/docs/screenshots/settings-stt-picker.png)
 
-*Settings → STT lets you flip between local Whisper and cloud Deepgram at runtime. The connection status indicator under the picker turns green when Deepgram's WebSocket is healthy and amber when it falls back to REST. **Click to expand.***
+*Settings → STT lets you flip between local Whisper and the cloud engines at runtime. The connection status indicator under the picker turns green when the WebSocket is healthy and amber when Deepgram falls back to REST. **Click to expand.***
+
+## Option 3: AssemblyAI
+
+AssemblyAI is a cloud speech-to-text service that streams audio over a
+WebSocket using its **Universal-3.5 Pro** streaming model. Unlike
+Deepgram, there is no REST fallback — if the socket drops, Rhema
+reconnects (up to 5 attempts, 1 second apart).
+
+### 1. Get an API key
+
+Sign up at [assemblyai.com](https://www.assemblyai.com/) and copy your
+API key.
+
+### 2. Add it to `.env`
+
+Create a `.env` file in the project root:
+
+```bash
+ASSEMBLYAI_API_KEY=your_key_here
+```
+
+Restart `bun run tauri dev` so the new key is picked up.
+
+### 3. Switch to AssemblyAI in the app
+
+Open Settings → STT and choose **AssemblyAI**. The status indicator
+shows WebSocket health in real time.
 
 ## Switching engines at runtime
 
-Both engines are wired into the same transcript stream, so you can switch
+All engines are wired into the same transcript stream, so you can switch
 without restarting the session. The active translation, sermon context,
 and queue state are preserved across the swap.
 
-## Comparing the two
+## Comparing the engines
 
-| | Whisper (local) | Deepgram (cloud) |
-| --- | --- | --- |
-| API cost | Free | Per-minute billing |
-| Internet required | No, after the model is downloaded | Yes (WebSocket) |
-| First-build time | Several minutes — `whisper.cpp` compiles via `bindgen` | Instant |
-| Long-form accuracy | Good | Excellent |
-| Punctuation | Decent | Excellent |
-| Works offline | Yes | No |
+| | Whisper (local) | Deepgram (cloud) | AssemblyAI (cloud) |
+| --- | --- | --- | --- |
+| API cost | Free | Per-minute billing | Per-hour billing |
+| Internet required | No, after the model is downloaded | Yes (WebSocket) | Yes (WebSocket) |
+| First-build time | Several minutes — `whisper.cpp` compiles via `bindgen` | Instant | Instant |
+| Long-form accuracy | Good | Excellent | Excellent |
+| Punctuation | Decent | Excellent | Excellent (Pro formatting) |
+| REST fallback | n/a | Yes | No |
+| Works offline | Yes | No | No |
 
 Latency depends heavily on hardware and network conditions, so we
 don't publish a single number — Whisper benefits from any GPU/Metal
-acceleration `whisper-rs` can pick up, and Deepgram is bounded by the
-round-trip to its nearest region. Pick whichever fits your install:
-Whisper for the no-cost local path, Deepgram for the lowest latency
-and best transcription quality on a reliable network.
+acceleration `whisper-rs` can pick up, while Deepgram and AssemblyAI are
+bounded by the round-trip to their nearest region. Pick whichever fits
+your install: Whisper for the no-cost local path, Deepgram for the lowest
+latency and a REST safety net, AssemblyAI for Universal-3.5 Pro
+transcription with keyterm boosting.

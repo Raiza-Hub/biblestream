@@ -41,8 +41,8 @@ A few things worth calling out:
 - **`style-src 'self' 'unsafe-inline'`** — required by Radix /
   shadcn for runtime style injection on portals and animations.
 - **`connect-src 'self'`** — the WebView itself only talks to the
-  Tauri IPC channel. Outbound network traffic (Deepgram WebSocket,
-  Bible data downloads) all happens from the Rust side, so the
+  Tauri IPC channel. Outbound network traffic (Deepgram and AssemblyAI
+  WebSockets, Bible data downloads) all happens from the Rust side, so the
   webview doesn't need to allow-list those endpoints.
 - **`frame-ancestors 'none'`** — the WebView can't be embedded
   anywhere.
@@ -107,8 +107,8 @@ already trust.
 - **No telemetry** — Rhema does not phone home. There's no
   analytics, no crash reporter, no usage tracking.
 - **Local-first by default** — Whisper runs locally, the database
-  lives on disk, and Deepgram is opt-in. No keys, no internet, no
-  problem.
+  lives on disk, and the cloud engines (Deepgram, AssemblyAI) are
+  opt-in. No keys, no internet, no problem.
 - **Bundled SQLite** — `rusqlite` with the `bundled` feature, so
   the binary doesn't link against a system SQLite that could be
   swapped out.

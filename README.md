@@ -45,8 +45,8 @@ speech-to-text stay inactive until you build from source and run
 
 ## Features
 
-- **Real-time speech-to-text** via local Whisper or cloud Deepgram (WebSocket streaming + REST fallback)
-  - Whisper runs locally with no API costs; Deepgram streams via WebSocket with REST fallback
+- **Real-time speech-to-text** via local Whisper, cloud Deepgram (WebSocket streaming + REST fallback), or cloud AssemblyAI (WebSocket streaming)
+  - Whisper runs locally with no API costs; Deepgram streams via WebSocket with REST fallback; AssemblyAI streams Universal-3.5 Pro over WebSocket
 - **Voice-controlled translation switching** — say "read in NIV" or "switch to ESV" to change translations instantly during a sermon
 - **Multi-strategy verse detection**
   - Direct reference parsing (Aho-Corasick automaton + fuzzy matching)
@@ -79,14 +79,14 @@ speech-to-text stay inactive until you build from source and run
 | **AI/ML** | ONNX Runtime (Qwen3-0.6B embeddings), Aho-Corasick, Fuse.js |
 | **Database** | SQLite via rusqlite (bundled) with FTS5 |
 | **Broadcast** | NDI 6 SDK via dynamic loading (libloading FFI) |
-| **STT** | Local Whisper via `whisper-rs`; Deepgram WebSocket + REST (`tokio-tungstenite`) |
+| **STT** | Local Whisper via `whisper-rs`; Deepgram and AssemblyAI WebSocket streaming (`tokio-tungstenite`) |
 
 ### Rust Crates
 
 | Crate | Purpose |
 |---|---|
 | `rhema-audio` | Audio device enumeration, capture, VAD (cpal) |
-| `rhema-stt` | Local Whisper (gated behind `whisper` Cargo feature) and Deepgram STT streaming + REST fallback |
+| `rhema-stt` | Local Whisper (gated behind `whisper` Cargo feature), Deepgram STT streaming + REST fallback, and AssemblyAI streaming |
 | `rhema-bible` | SQLite Bible DB, FTS5 search, cross-references |
 | `rhema-detection` | Verse detection pipeline: direct, semantic, quotation, ensemble merger, sentence buffer, sermon context, reading mode |
 | `rhema-broadcast` | NDI video frame output via FFI |
@@ -100,7 +100,7 @@ speech-to-text stay inactive until you build from source and run
 - [Tauri v2 prerequisites](https://v2.tauri.app/start/prerequisites/) (platform-specific system dependencies)
 - [Python 3](https://www.python.org/) (only for the optional `--with-embedding` setup and downloading copyrighted translations)
 - CMake + LLVM/libclang (required for local Whisper STT) — see [Platform-specific setup](#platform-specific-setup) below
-- [Deepgram API key](https://deepgram.com/) (optional, for cloud speech-to-text instead of Whisper)
+- [Deepgram API key](https://deepgram.com/) or [AssemblyAI API key](https://www.assemblyai.com/) (optional, for cloud speech-to-text instead of Whisper)
 
 ### Platform-specific setup
 
@@ -191,7 +191,7 @@ The delete matters: setup skips any artifact that already exists, so a stale ind
 
 #### Speech-to-Text Options
 
-Rhema supports two speech-to-text engines:
+Rhema supports three speech-to-text engines:
 
 **Option 1: Whisper (Local, Free)**
 Whisper runs locally on your machine with no API costs or per-minute billing.
@@ -206,6 +206,15 @@ DEEPGRAM_API_KEY=your_key_here
 ```
 
 Get your API key at [deepgram.com](https://deepgram.com/)
+
+**Option 3: AssemblyAI (Cloud, Paid)**
+Create a `.env` file in the project root:
+
+```
+ASSEMBLYAI_API_KEY=your_key_here
+```
+
+Get your API key at [assemblyai.com](https://www.assemblyai.com/). Uses the Universal-3.5 Pro streaming model over WebSocket (no REST fallback).
 
 ### NDI SDK (optional)
 
@@ -260,7 +269,7 @@ rhema/
 ├── src-tauri/                    # Rust backend (Tauri v2)
 │   ├── crates/
 │   │   ├── audio/                # Audio capture & metering (cpal)
-│   │   ├── stt/                  # Deepgram STT (WebSocket + REST)
+│   │   ├── stt/                  # Deepgram (WS + REST) & AssemblyAI (WS) STT, local Whisper
 │   │   ├── bible/                # SQLite Bible DB, search, cross-references
 │   │   ├── detection/            # Verse detection pipeline
 │   │   │   ├── direct/           # Aho-Corasick + fuzzy reference parsing
@@ -323,3 +332,4 @@ Create a `.env` file in the project root (optional):
 | Variable | Required | Description |
 |---|---|---|
 | `DEEPGRAM_API_KEY` | Optional | API key for Deepgram speech-to-text (not needed if using Whisper) |
+| `ASSEMBLYAI_API_KEY` | Optional | API key for AssemblyAI speech-to-text (not needed if using Whisper) |

@@ -16,6 +16,7 @@ optional cloud services.
 | Variable | Required | Description |
 | --- | --- | --- |
 | `DEEPGRAM_API_KEY` | Optional | API key for [Deepgram](https://deepgram.com) speech-to-text. Not needed when running Whisper locally. |
+| `ASSEMBLYAI_API_KEY` | Optional | API key for [AssemblyAI](https://www.assemblyai.com/) speech-to-text (Universal-3.5 Pro streaming). Not needed when running Whisper locally. |
 | `GITHUB_TOKEN` | Optional | Used by the marketing site to fetch up-to-date star counts at build time without hitting the unauthenticated rate limit. |
 
 ## Where to put them
@@ -25,6 +26,7 @@ Create a file called `.env` in the project root (the same folder as
 
 ```bash
 DEEPGRAM_API_KEY=dg_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+ASSEMBLYAI_API_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
 Restart the dev server after editing `.env` so the new value is

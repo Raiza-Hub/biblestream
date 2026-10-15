@@ -35,8 +35,9 @@ describe("settings store", () => {
   it("hydrate merges persisted values over defaults", async () => {
     mockGet.mockImplementation(async (key: string) => {
       if (key === "gain") return 2.5
-      if (key === "sttProvider") return "whisper"
+      if (key === "sttProvider") return "assemblyai"
       if (key === "deepgramApiKey") return "dg-key"
+      if (key === "assemblyAiApiKey") return "as-key"
       return null
     })
 
@@ -45,8 +46,9 @@ describe("settings store", () => {
 
     const state = useSettingsStore.getState()
     expect(state.gain).toBe(2.5)
-    expect(state.sttProvider).toBe("whisper")
+    expect(state.sttProvider).toBe("assemblyai")
     expect(state.deepgramApiKey).toBe("dg-key")
+    expect(state.assemblyAiApiKey).toBe("as-key")
     // Defaults remain for keys with null
     expect(state.autoMode).toBe(false)
     expect(state.confidenceThreshold).toBe(0.8)

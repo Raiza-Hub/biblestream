@@ -11,6 +11,8 @@ pub struct AppState {
     pub audio_test_active: Arc<AtomicBool>,
     #[expect(dead_code, reason = "reserved for future Deepgram key injection")]
     pub deepgram_api_key: Option<String>,
+    #[expect(dead_code, reason = "reserved for future AssemblyAI key injection")]
+    pub assemblyai_api_key: Option<String>,
     /// Set at startup when the embedding index provably mismatches the
     /// loaded ONNX model — surfaced as a UI warning banner via
     /// `detection_status`.
@@ -26,6 +28,7 @@ impl AppState {
             stt_active: Arc::new(AtomicBool::new(false)),
             audio_test_active: Arc::new(AtomicBool::new(false)),
             deepgram_api_key: None,
+            assemblyai_api_key: None,
             embedding_warning: None,
         }
     }

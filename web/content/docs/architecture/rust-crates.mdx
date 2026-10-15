@@ -13,7 +13,7 @@ dependencies follow a strict downward fan-out from the API layer.
 | Crate | Responsibility |
 | --- | --- |
 | `rhema-audio` | Audio device enumeration, capture, voice activity detection (cpal) |
-| `rhema-stt` | Deepgram STT WebSocket + REST fallback; Whisper local engine |
+| `rhema-stt` | Deepgram WebSocket + REST fallback, AssemblyAI WebSocket, and Whisper local engine |
 | `rhema-bible` | SQLite Bible database, FTS5 search, cross-references |
 | `rhema-detection` | Verse detection pipeline: direct, semantic, quotation, ensemble merger, sentence buffer, sermon context, reading mode |
 | `rhema-broadcast` | NDI video frame output via FFI |
@@ -28,9 +28,9 @@ Each crate maps to a clear external responsibility:
   enumeration, capture buffers, sample-rate conversion, VAD — lives
   here so the rest of the workspace can pretend audio is just bytes.
 
-- **`rhema-stt`** owns network and local STT. Both Whisper and Deepgram
-  emit the same transcript event type, so the consumer doesn't know
-  (or care) which engine is wired in.
+- **`rhema-stt`** owns network and local STT. Whisper, Deepgram, and
+  AssemblyAI all emit the same transcript event type, so the consumer
+  doesn't know (or care) which engine is wired in.
 
 - **`rhema-bible`** owns the database. FTS5 query construction,
   cross-reference joins, BM25 ranking — all of it is encapsulated
@@ -80,7 +80,8 @@ Two crates are gated behind Cargo features so the workspace stays
 buildable on minimal toolchains:
 
 - `rhema-stt` exposes a `whisper` feature (`whisper-rs = "0.16"`,
-  `optional = true`). The Deepgram path is always available.
+  `optional = true`). The Deepgram and AssemblyAI paths are always
+  available.
 - `rhema-detection` exposes `onnx` (turns on `ort = "2.0.0-rc.12"`)
   and `vector-search` features.
 

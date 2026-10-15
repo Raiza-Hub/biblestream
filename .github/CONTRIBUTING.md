@@ -65,7 +65,7 @@ rhema/
 ├── src-tauri/        Rust workspace
 │   ├── crates/
 │   │   ├── audio         cpal-based capture, VAD, metering
-│   │   ├── stt           Deepgram (WS + REST), local Whisper
+│   │   ├── stt           Deepgram (WS + REST), AssemblyAI (WS), local Whisper
 │   │   ├── bible         SQLite + FTS5, cross-references
 │   │   ├── detection     Direct parsing, semantic search, ensemble merger
 │   │   ├── broadcast     NDI output via FFI

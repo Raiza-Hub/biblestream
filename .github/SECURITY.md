@@ -30,7 +30,7 @@ manifest-src 'self';
 - **`style-src 'self' 'unsafe-inline'`** — `'unsafe-inline'` is required by Tailwind utility generation, React inline `style={}` props, the `<style>` block in `broadcast-output.html`, and the dynamic `<style>` element that `src/components/theme-provider.tsx` injects during theme switches to suppress transitions.
 - **`img-src 'self' data: blob:`** — `data:` covers theme background images (loaded via `@tauri-apps/plugin-fs` and converted to base64 in `src/lib/theme-designer-files.ts`); `blob:` covers canvas-derived images in the broadcast output window. External HTTPS images are deliberately **not** allowed: there is no feature that accepts an HTTPS URL from a user, and allowing `https:` would open an `<img src>`-based exfil path.
 - **`font-src 'self' data:`** — fonts ship bundled via `@fontsource-variable/*`; `data:` permits inline font data.
-- **`connect-src 'self'`** — the frontend makes no direct external network calls. All external traffic (e.g., Deepgram STT over WebSocket in `src-tauri/crates/stt/`) is initiated from Rust and is out of scope for CSP.
+- **`connect-src 'self'`** — the frontend makes no direct external network calls. All external traffic (e.g., Deepgram and AssemblyAI STT over WebSocket in `src-tauri/crates/stt/`) is initiated from Rust and is out of scope for CSP.
 - **`media-src 'self' blob:`** — audio capture and playback via MediaStream-derived blob URLs.
 - **`worker-src 'self'`** — explicit; prevents workers from remote origins if any are added later.
 - **`frame-src 'none'`** and **`frame-ancestors 'none'`** — the app does not use iframes and must not be embedded.
@@ -50,7 +50,7 @@ manifest-src 'self';
 
 ### What the CSP does NOT cover
 
-- Network calls from Rust (the STT crate's Deepgram WebSocket, any future `reqwest` calls). Audit Rust-side outbound traffic separately.
+- Network calls from Rust (the STT crate's Deepgram and AssemblyAI WebSockets, any future `reqwest` calls). Audit Rust-side outbound traffic separately.
 - Local IPC via Tauri `invoke()` — this uses custom protocols that are same-origin from the webview's perspective.
 - Supply-chain risks (a compromised npm or cargo dependency that injects code at build time).
 

@@ -81,6 +81,44 @@ describe("use-transcription", () => {
       )
     })
 
+    it("forwards the AssemblyAI key when provider is assemblyai", async () => {
+      mockInvoke.mockResolvedValue(undefined)
+      const { useSettingsStore, transcriptionActions } = await loadModules()
+
+      useSettingsStore.setState({
+        sttProvider: "assemblyai",
+        assemblyAiApiKey: "as-live-456",
+        deepgramApiKey: "dg-ignored",
+        audioDeviceId: "dev-7",
+        gain: 1.2,
+      })
+
+      await transcriptionActions.start()
+
+      expect(mockInvoke).toHaveBeenCalledWith(
+        "start_transcription",
+        expect.objectContaining({
+          apiKey: "as-live-456",
+          provider: "assemblyai",
+          deviceId: "dev-7",
+          gain: 1.2,
+        })
+      )
+    })
+
+    it("routes a missing-AssemblyAI-key error to onMissingApiKey (no toast)", async () => {
+      mockInvoke.mockRejectedValue(
+        "No AssemblyAI API key provided. Set it in Settings or via ASSEMBLYAI_API_KEY env var."
+      )
+      const { transcriptionActions } = await loadModules()
+      const onMissingApiKey = vi.fn()
+
+      await transcriptionActions.start(onMissingApiKey)
+
+      expect(onMissingApiKey).toHaveBeenCalledTimes(1)
+      expect(mockToastError).not.toHaveBeenCalled()
+    })
+
     it("sets connectionStatus to 'connecting' before invoke resolves and 'isTranscribing' after", async () => {
       let resolveInvoke: () => void = () => {}
       mockInvoke.mockReturnValue(

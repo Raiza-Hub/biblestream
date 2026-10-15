@@ -16,13 +16,13 @@ plus a Python interpreter for the data-prep pipeline. The complete list:
 | [Tauri v2 prerequisites](https://v2.tauri.app/start/prerequisites/) | Platform-specific system libraries (WebView2 on Windows, WebKit on Linux) |
 | [Python 3](https://www.python.org/) | Downloads copyrighted translations and exports the embedding model to ONNX |
 | CMake + LLVM/libclang | Required for local Whisper STT — `whisper.cpp` is built from source via `bindgen` |
-| [Deepgram API key](https://deepgram.com/) (optional) | Cloud speech-to-text, only if you don't want to run Whisper locally |
+| [Deepgram](https://deepgram.com/) or [AssemblyAI](https://www.assemblyai.com/) API key (optional) | Cloud speech-to-text, only if you don't want to run Whisper locally |
 
-<Callout title="Whisper vs Deepgram" type="info">
+<Callout title="Choosing a STT engine" type="info">
 You only need **one** speech-to-text engine. Whisper runs locally with no API
-costs but compiles `whisper.cpp` from source on first build. Deepgram streams
-via WebSocket and bypasses the local build but needs a paid API key. See
-[Speech-to-text](/docs/getting-started/speech-to-text) for tradeoffs.
+costs but compiles `whisper.cpp` from source on first build. Deepgram and
+AssemblyAI stream via WebSocket and bypass the local build but need a paid API
+key. See [Speech-to-text](/docs/getting-started/speech-to-text) for tradeoffs.
 </Callout>
 
 ## Hardware

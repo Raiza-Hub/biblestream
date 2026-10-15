@@ -13,7 +13,7 @@ import { Card, Cards } from "fumadocs-ui/components/card";
 | **AI / ML** | ONNX Runtime (Qwen3-0.6B embeddings), Aho-Corasick, Fuse.js |
 | **Database** | SQLite via `rusqlite` (bundled) with FTS5 |
 | **Broadcast** | NDI 6 SDK via dynamic loading (`libloading` FFI) |
-| **STT** | Local Whisper via `whisper.cpp`, or Deepgram WebSocket + REST (`tokio-tungstenite`) |
+| **STT** | Local Whisper via `whisper.cpp`, or Deepgram / AssemblyAI WebSocket streaming (`tokio-tungstenite`) |
 
 ![Layered architecture diagram — React frontend over Tauri IPC, Rust workspace below, with NDI / STT / SQLite as external surfaces](/docs/diagrams/diagram-stack-layers.svg)
 
@@ -80,12 +80,14 @@ surface just doesn't appear).
 
 ## STT
 
-Two engines, one transport:
+Three engines, one transport:
 
 - **Whisper** runs locally via `whisper.cpp`, compiled by `bindgen`
   during the first build.
 - **Deepgram** streams over a WebSocket using `tokio-tungstenite`, with
   a REST fallback that uploads short windows when the socket drops.
+- **AssemblyAI** streams Universal-3.5 Pro over a WebSocket using
+  `tokio-tungstenite`, with automatic reconnects but no REST fallback.
 
-Both feed a unified transcript stream so the rest of the pipeline
+All three feed a unified transcript stream so the rest of the pipeline
 doesn't care which engine is active.

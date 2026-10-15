@@ -15,15 +15,33 @@ interface TranscriptPartialPayload {
 
 interface UseTranscriptionOptions {
   /**
-   * Called when `start_transcription` fails because the user picked the
-   * Deepgram provider but hasn't set an API key. Panels typically react by
-   * opening a key-prompt dialog instead of showing the default toast.
+   * Called when `start_transcription` fails because the user picked a cloud
+   * STT provider (Deepgram or AssemblyAI) but hasn't set an API key. Panels
+   * typically react by opening a key-prompt dialog instead of showing the
+   * default toast.
    */
   onMissingApiKey?: () => void
 }
 
 const MISSING_DEEPGRAM_KEY_MARKER = "No Deepgram API key"
+const MISSING_ASSEMBLYAI_KEY_MARKER = "No AssemblyAI API key"
 const NOT_RUNNING_ERROR = "Transcription is not running"
+
+/** Map the selected provider to the API key the backend should receive. */
+function resolveApiKey(settings: {
+  sttProvider: string
+  deepgramApiKey: string | null
+  assemblyAiApiKey: string | null
+}): string {
+  switch (settings.sttProvider) {
+    case "deepgram":
+      return settings.deepgramApiKey ?? ""
+    case "assemblyai":
+      return settings.assemblyAiApiKey ?? ""
+    default:
+      return ""
+  }
+}
 
 export const transcriptionActions = {
   async start(onMissingApiKey?: () => void): Promise<void> {
@@ -33,10 +51,7 @@ export const transcriptionActions = {
     const settings = useSettingsStore.getState()
     try {
       await invoke("start_transcription", {
-        apiKey:
-          settings.sttProvider === "deepgram"
-            ? (settings.deepgramApiKey ?? "")
-            : "",
+        apiKey: resolveApiKey(settings),
         deviceId: settings.audioDeviceId,
         gain: settings.gain,
         provider: settings.sttProvider,
@@ -45,7 +60,10 @@ export const transcriptionActions = {
     } catch (e) {
       const msg = String(e)
       transcript.setConnectionStatus("error")
-      if (msg.includes(MISSING_DEEPGRAM_KEY_MARKER) && onMissingApiKey) {
+      const missingKey =
+        msg.includes(MISSING_DEEPGRAM_KEY_MARKER) ||
+        msg.includes(MISSING_ASSEMBLYAI_KEY_MARKER)
+      if (missingKey && onMissingApiKey) {
         onMissingApiKey()
       } else {
         toast.error("Could not start transcription", { description: msg })

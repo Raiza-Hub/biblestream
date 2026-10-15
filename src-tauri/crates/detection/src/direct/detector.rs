@@ -496,6 +496,34 @@ impl DirectDetector {
         &self.recent_detections
     }
 
+    /// Whether `text` names a Bible book *and* gives it an explicit chapter
+    /// (or chapter:verse).
+    ///
+    /// Distinct from a bare book word, which `parse_reference` treats as a
+    /// defaulted chapter 1 so a later "chapter N" can refine it. While reading
+    /// mode owns a chapter the app layer uses this to tell a genuine spoken
+    /// citation ("John 3:16") from a book-like English word in the text being
+    /// read aloud ("...and mark this...", "the acts of...", "a new song...").
+    pub fn has_explicit_reference(&self, text: &str) -> bool {
+        let cleaned = clean_transcript(text);
+        self.matcher.find_books(&cleaned).iter().any(|book_match| {
+            let Some(reference) = parser::parse_reference(&cleaned, book_match) else {
+                return false;
+            };
+            if !is_valid_reference(reference.book_number, reference.chapter) {
+                return false;
+            }
+            if reference.verse_start > 0 {
+                return true;
+            }
+            // Chapter-only: only counts when the chapter was spoken explicitly,
+            // not when it defaulted to 1 from a bare book name.
+            let after_book = cleaned[book_match.end..].trim_start();
+            after_book.starts_with(|c: char| c.is_ascii_digit())
+                || after_book.to_lowercase().starts_with("chapter")
+        })
+    }
+
     /// Check if the transcript contains a translation switching command.
     /// Returns the translation abbreviation if found (e.g., "NIV", "ESV").
     ///
@@ -2278,5 +2306,42 @@ mod tests {
         assert_eq!(out[0].verse_ref.book_number, 45, "Romans");
         assert_eq!(out[0].verse_ref.chapter, 8);
         assert_eq!(out[0].verse_ref.verse_start, 28);
+    }
+
+    #[test]
+    fn has_explicit_reference_accepts_real_citations() {
+        let detector = DirectDetector::new();
+        for text in [
+            "John 3:16",
+            "turn to Genesis 3",
+            "Genesis chapter 3",
+            "open to Romans 8:28",
+        ] {
+            assert!(
+                detector.has_explicit_reference(text),
+                "{text:?} should be an explicit reference"
+            );
+        }
+    }
+
+    /// Book-like English words in the text being read must not count. A bare
+    /// book name (defaulted chapter 1), a book-less verse, or an unrelated
+    /// number must all read as "not an explicit reference".
+    #[test]
+    fn has_explicit_reference_rejects_bookless_and_bare_words() {
+        let detector = DirectDetector::new();
+        for text in [
+            "verse 20",
+            "and mark this",
+            "the acts of the apostles",
+            "sing a new song",
+            "20",
+            "chapter 5",
+        ] {
+            assert!(
+                !detector.has_explicit_reference(text),
+                "{text:?} must not be treated as an explicit reference"
+            );
+        }
     }
 }

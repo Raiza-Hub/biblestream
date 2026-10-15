@@ -10,6 +10,7 @@ import {
   useQueueStore,
   useBibleStore,
   useBroadcastStore,
+  useSettingsStore,
   useTranscriptStore,
 } from "@/stores"
 import { useTauriEvent } from "@/hooks/use-tauri-event"
@@ -62,8 +63,11 @@ export function TranscriptPanel() {
     startTranscription,
     stopTranscription,
   } = useTranscription({ onMissingApiKey })
+  const sttProvider = useSettingsStore((s) => s.sttProvider)
   const hasPartial = useTranscriptStore((s) => s.currentPartial.length > 0)
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  const cloudService = sttProvider === "assemblyai" ? "AssemblyAI" : "Deepgram"
 
   // Latency debugging: surface main-thread stalls in the unified [LAT] log.
   useEffect(() => observeLongTasks(), [])
@@ -315,8 +319,8 @@ export function TranscriptPanel() {
       <ApiKeyPrompt
         open={showKeyPrompt}
         onOpenChange={setShowKeyPrompt}
-        service="Deepgram"
-        description="Live transcription needs a Deepgram API key. Add it in settings so the app can start listening."
+        service={cloudService}
+        description={`Live transcription needs a ${cloudService} API key. Add it in settings so the app can start listening.`}
       />
     </div>
   )
